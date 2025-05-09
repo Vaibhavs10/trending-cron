@@ -100,7 +100,7 @@ def update_dataset(models_df, datasets_df, dataset_repo):
 
 def main():
     # Configuration
-    DATASET_REPO = "reach-vb/trending-test"  # Change this to your repo
+    DATASET_REPO = "reach-vb/trending-repos"  # Change this to your repo
 
     # Check Hugging Face Hub login status
     hf_api_for_login_check = HfApi()
