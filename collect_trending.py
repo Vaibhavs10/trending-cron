@@ -19,7 +19,7 @@ def get_trending_models_and_datasets():
     models = hf_api.list_models(
         sort="trendingScore",
         direction=-1,
-        limit=100,
+        limit=200,
         full=True
     )
     
@@ -27,7 +27,7 @@ def get_trending_models_and_datasets():
     datasets = hf_api.list_datasets(
         sort="trendingScore",
         direction=-1,
-        limit=100,
+        limit=200,
         full=True
     )
     
