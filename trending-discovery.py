@@ -34,47 +34,49 @@ def find_new_trending_items(dataset_repo="reach-vb/trending-repos", days=7):
         
         logger.info(f"Latest data collected at: {latest_date}")
         logger.info(f"Looking for items that weren't trending before: {cutoff_date}")
+
+        # Get only IDs for comparison
+        models_before_ids = set(models_df[models_df['collected_at'] < cutoff_date]['id'].unique())
+        models_after_ids = set(models_df[models_df['collected_at'] >= cutoff_date]['id'].unique())
         
-        # Find all items that existed before the cutoff date
-        existing_models_before = set(models_df[models_df['collected_at'] < cutoff_date]['id'].unique())
-        existing_datasets_before = set(datasets_df[datasets_df['collected_at'] < cutoff_date]['id'].unique())
+        datasets_before_ids = set(datasets_df[datasets_df['collected_at'] < cutoff_date]['id'].unique())
+        datasets_after_ids = set(datasets_df[datasets_df['collected_at'] >= cutoff_date]['id'].unique())
+
+        # Find truly new items (in after but not in before)
+        new_models_ids = models_after_ids - models_before_ids
+        new_datasets_ids = datasets_after_ids - datasets_before_ids
+
+        # Get complete information only for the new items
+        new_models = (models_df[models_df['id'].isin(new_models_ids)]
+                     .sort_values('collected_at', ascending=False)
+                     .drop_duplicates('id', keep='first'))
         
-        # Find items that appeared after cutoff date
-        recent_models = models_df[models_df['collected_at'] >= cutoff_date]
-        recent_datasets = datasets_df[datasets_df['collected_at'] >= cutoff_date]
-        
-        # Filter to only keep items that weren't in the earlier period at all
-        truly_new_models = recent_models[~recent_models['id'].isin(existing_models_before)]
-        truly_new_datasets = recent_datasets[~recent_datasets['id'].isin(existing_datasets_before)]
-        
-        # Get the most recent entry for each new item (de-duplicate)
-        new_models = (truly_new_models.sort_values('collected_at', ascending=False)
-                                     .drop_duplicates('id', keep='first'))
-        new_datasets = (truly_new_datasets.sort_values('collected_at', ascending=False)
-                                       .drop_duplicates('id', keep='first'))
-        
-        # Sort by collection date (newest first)
-        new_models = new_models.sort_values('collected_at', ascending=False)
-        new_datasets = new_datasets.sort_values('collected_at', ascending=False)
-        
+        new_datasets = (datasets_df[datasets_df['id'].isin(new_datasets_ids)]
+                       .sort_values('collected_at', ascending=False)
+                       .drop_duplicates('id', keep='first'))
+
         # Print results
-        print("\n=== New Trending Models (not trending before last {} days) ===".format(days))
+        print(f"\n=== New Trending Models (first appeared in last {days} days) ===")
         if not new_models.empty:
             for _, row in new_models.iterrows():
                 print(f"{row['collected_at']}: {row['id']} (Downloads: {row['downloads']}, Likes: {row['likes']})")
+            print(f"\nTotal new models: {len(new_models)}")
         else:
             print("No new trending models found.")
         
-        print("\n=== New Trending Datasets (not trending before last {} days) ===".format(days))
+        print(f"\n=== New Trending Datasets (first appeared in last {days} days) ===")
         if not new_datasets.empty:
             for _, row in new_datasets.iterrows():
                 print(f"{row['collected_at']}: {row['id']} (Downloads: {row['downloads']}, Likes: {row['likes']})")
+            print(f"\nTotal new datasets: {len(new_datasets)}")
         else:
             print("No new trending datasets found.")
         
         return {
             'new_models': new_models,
-            'new_datasets': new_datasets
+            'new_datasets': new_datasets,
+            'new_models_count': len(new_models),
+            'new_datasets_count': len(new_datasets)
         }
         
     except Exception as e:
@@ -82,5 +84,5 @@ def find_new_trending_items(dataset_repo="reach-vb/trending-repos", days=7):
         raise
 
 if __name__ == "__main__":
-    # Example usage - finds items that weren't trending at all before the last 7 days
+    # Example usage
     results = find_new_trending_items(days=7)
