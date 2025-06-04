@@ -7,14 +7,15 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def find_new_trending_items(dataset_repo="reach-vb/trending-repos", days=7):
+def find_new_trending_items(dataset_repo="reach-vb/trending-repos", days=7, max_age_months=1, top_n_per_day=100):
     """
-    Find models/datasets that appeared in trending in the last specified days
-    and weren't in the trending list at all before that period.
+    Find new trending models/datasets that first appeared in the specified time window.
     
     Args:
         dataset_repo (str): Hugging Face dataset repository
         days (int): Number of days to look back for new trending items
+        max_age_months (int): Exclude models/datasets last modified more than this many months ago
+        top_n_per_day (int): Only consider top N trending items per day (default 100)
     """
     try:
         # Load the dataset
@@ -24,16 +25,27 @@ def find_new_trending_items(dataset_repo="reach-vb/trending-repos", days=7):
         models_df = dataset["models"].to_pandas()
         datasets_df = dataset["datasets"].to_pandas()
         
-        # Convert collected_at to datetime
+        # Convert dates to datetime
         models_df['collected_at'] = pd.to_datetime(models_df['collected_at'])
+        models_df['last_modified'] = pd.to_datetime(models_df['last_modified'])
         datasets_df['collected_at'] = pd.to_datetime(datasets_df['collected_at'])
+        datasets_df['last_modified'] = pd.to_datetime(datasets_df['last_modified'])
+        
+        # Filter to only keep top N items per day
+        models_df = models_df.sort_values(['collected_at', 'downloads'], ascending=[True, False])
+        models_df = models_df.groupby('collected_at').head(top_n_per_day).reset_index(drop=True)
+        
+        datasets_df = datasets_df.sort_values(['collected_at', 'downloads'], ascending=[True, False])
+        datasets_df = datasets_df.groupby('collected_at').head(top_n_per_day).reset_index(drop=True)
         
         # Get the most recent collection date
         latest_date = max(models_df['collected_at'].max(), datasets_df['collected_at'].max())
         cutoff_date = latest_date - timedelta(days=days)
+        age_cutoff_date = latest_date - timedelta(days=30*max_age_months)
         
         logger.info(f"Latest data collected at: {latest_date}")
         logger.info(f"Looking for items that weren't trending before: {cutoff_date}")
+        logger.info(f"Excluding items last modified before: {age_cutoff_date}")
 
         # Get only IDs for comparison
         models_before_ids = set(models_df[models_df['collected_at'] < cutoff_date]['id'].unique())
@@ -55,19 +67,25 @@ def find_new_trending_items(dataset_repo="reach-vb/trending-repos", days=7):
                        .sort_values('collected_at', ascending=False)
                        .drop_duplicates('id', keep='first'))
 
+        # Apply age filter
+        new_models = new_models[new_models['last_modified'] >= age_cutoff_date]
+        new_datasets = new_datasets[new_datasets['last_modified'] >= age_cutoff_date]
+
         # Print results
-        print(f"\n=== New Trending Models (first appeared in last {days} days) ===")
+        print(f"\n=== New Trending Models (first appeared in last {days} days, modified within {max_age_months} month(s)) ===")
         if not new_models.empty:
             for _, row in new_models.iterrows():
-                print(f"{row['collected_at']}: {row['id']} (Downloads: {row['downloads']}, Likes: {row['likes']})")
+                modified_days = (latest_date - row['last_modified']).days
+                print(f"{row['collected_at']}: {row['id']} (Modified {modified_days}d ago, Downloads: {row['downloads']}, Likes: {row['likes']})")
             print(f"\nTotal new models: {len(new_models)}")
         else:
             print("No new trending models found.")
         
-        print(f"\n=== New Trending Datasets (first appeared in last {days} days) ===")
+        print(f"\n=== New Trending Datasets (first appeared in last {days} days, modified within {max_age_months} month(s)) ===")
         if not new_datasets.empty:
             for _, row in new_datasets.iterrows():
-                print(f"{row['collected_at']}: {row['id']} (Downloads: {row['downloads']}, Likes: {row['likes']})")
+                modified_days = (latest_date - row['last_modified']).days
+                print(f"{row['collected_at']}: {row['id']} (Modified {modified_days}d ago, Downloads: {row['downloads']}, Likes: {row['likes']})")
             print(f"\nTotal new datasets: {len(new_datasets)}")
         else:
             print("No new trending datasets found.")
@@ -84,5 +102,9 @@ def find_new_trending_items(dataset_repo="reach-vb/trending-repos", days=7):
         raise
 
 if __name__ == "__main__":
-    # Example usage
-    results = find_new_trending_items(days=7)
+    # Example usage with all parameters
+    results = find_new_trending_items(
+        days=7,
+        max_age_months=1,
+        top_n_per_day=100
+    )
