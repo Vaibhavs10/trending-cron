@@ -25,11 +25,11 @@ def find_new_trending_items(dataset_repo="reach-vb/trending-repos", days=7, max_
         models_df = dataset["models"].to_pandas()
         datasets_df = dataset["datasets"].to_pandas()
         
-        # Convert dates to datetime
-        models_df['collected_at'] = pd.to_datetime(models_df['collected_at'])
-        models_df['last_modified'] = pd.to_datetime(models_df['last_modified'])
-        datasets_df['collected_at'] = pd.to_datetime(datasets_df['collected_at'])
-        datasets_df['last_modified'] = pd.to_datetime(datasets_df['last_modified'])
+        # Convert dates to datetime and ensure consistent timezone (UTC)
+        models_df['collected_at'] = pd.to_datetime(models_df['collected_at'], utc=True)
+        models_df['last_modified'] = pd.to_datetime(models_df['last_modified'], utc=True)
+        datasets_df['collected_at'] = pd.to_datetime(datasets_df['collected_at'], utc=True)
+        datasets_df['last_modified'] = pd.to_datetime(datasets_df['last_modified'], utc=True)
         
         # Filter to only keep top N items per day
         models_df = models_df.sort_values(['collected_at', 'downloads'], ascending=[True, False])
@@ -38,7 +38,7 @@ def find_new_trending_items(dataset_repo="reach-vb/trending-repos", days=7, max_
         datasets_df = datasets_df.sort_values(['collected_at', 'downloads'], ascending=[True, False])
         datasets_df = datasets_df.groupby('collected_at').head(top_n_per_day).reset_index(drop=True)
         
-        # Get the most recent collection date
+        # Get the most recent collection date (timezone-aware)
         latest_date = max(models_df['collected_at'].max(), datasets_df['collected_at'].max())
         cutoff_date = latest_date - timedelta(days=days)
         age_cutoff_date = latest_date - timedelta(days=30*max_age_months)
@@ -67,7 +67,7 @@ def find_new_trending_items(dataset_repo="reach-vb/trending-repos", days=7, max_
                        .sort_values('collected_at', ascending=False)
                        .drop_duplicates('id', keep='first'))
 
-        # Apply age filter
+        # Apply age filter (now comparing timezone-aware datetimes)
         new_models = new_models[new_models['last_modified'] >= age_cutoff_date]
         new_datasets = new_datasets[new_datasets['last_modified'] >= age_cutoff_date]
 
